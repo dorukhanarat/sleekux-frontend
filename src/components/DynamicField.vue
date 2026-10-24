@@ -2,7 +2,6 @@
 
 import type { TransformationParameterDef } from '../types/transformation';
 
-
 interface Props {
     param: TransformationParameterDef,
     modelValue: string | boolean | number;
@@ -11,8 +10,14 @@ interface Props {
 defineProps<Props>();
 
 const emit = defineEmits<{
-    (e: 'update:ModelValue', val: string | number | boolean): void;
+    (e: 'update:modelValue', val: string | number | boolean): void;
 }>();
+
+// Keep a cleared field empty instead of coercing it to 0
+const onNumberInput = (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    emit('update:modelValue', input.value === '' ? '' : input.valueAsNumber);
+};
 
 </script>
 
@@ -29,7 +34,7 @@ const emit = defineEmits<{
             <input
                 type="checkbox"
                 :checked="Boolean(modelValue)"
-                @change="emit('update:ModelValue', ($event.target as HTMLInputElement).checked)"
+                @change="emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
             />
             <span v-if="param.placeholder" class="hint">{{ param.placeholder }}</span>
         </div>
@@ -38,20 +43,22 @@ const emit = defineEmits<{
         <input
             v-else-if="param.type === 'number'"
             type="number"
+            class="text-input"
             :value="modelValue"
             :placeholder="param.placeholder || ''"
             :required="param.required"
-            @input="emit('update:ModelValue', Number(($event.target as HTMLInputElement).value))"
+            @input="onNumberInput"
         />
 
         <!-- Fallback / Text / Regex: Render Text Input -->
         <input
             v-else
             type="text"
+            class="text-input"
             :value="modelValue"
             :placeholder="param.placeholder || ''"
             :required="param.required"
-            @input="emit('update:ModelValue', ($event.target as HTMLInputElement).value)"
+            @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
         />
     </div>
 </template>
@@ -95,12 +102,12 @@ const emit = defineEmits<{
 .text-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 10px;
+  padding: 0.6rem 0.75rem;
   background-color: #ffffff;
   color: #0f172a;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 
 .text-input::placeholder {

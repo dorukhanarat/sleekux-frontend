@@ -1,17 +1,23 @@
 <!-- src/components/TransformationPipeline.vue -->
 <script setup lang ="ts">
-    import {ref, onMounted} from 'vue';
-    import { getTransformations } from '../api/transformationApi';
-    import type { ConfiguredStep, TransformationDefinition } from '../types/transformation';
-import DynamicField from './DynamicField.vue';
+    import { ref, onMounted } from 'vue';
+    import { executeTransformations, getTransformations } from '../api/transformationApi';
+    import type { TransformResponse,  ConfiguredStep, TransformationDefinition } from '../types/transformation';
+    import DynamicField from './DynamicField.vue';
 
+    // Reactive States
     const definitions = ref<TransformationDefinition[]>([]);
-    const selectedKey = ref<String>('');
+    const selectedKey = ref<string>('');
+    const inputText = ref<string>('');
+    const steps = ref<ConfiguredStep[]>([]);
+    const result = ref<TransformResponse | null>(null)
+
     const isLoading = ref<boolean>(false);
+    const isExecuting = ref<boolean>(false);
     const errorMessage = ref<string | null>(null);
 
-    const steps = ref<ConfiguredStep[]>([]);
 
+    // Fetch available transformations
     const loadTransformations = async () => {
         isLoading.value = true;
         errorMessage.value = null;
@@ -30,6 +36,7 @@ import DynamicField from './DynamicField.vue';
         }
     }
 
+    // Step Management
     const addStep = () => {
         if(!selectedKey.value) return;
 
@@ -57,17 +64,45 @@ import DynamicField from './DynamicField.vue';
 
     const moveStep = (index: number, direction: 'up' | 'down') => {
         const targetIndex = direction === 'up' ? index - 1 : index + 1;
-        if (targetIndex < 0 || targetIndex > steps.value.length) return;
+        if (targetIndex < 0 || targetIndex >= steps.value.length) return;
 
         const [movedItem] = steps.value.splice(index, 1);
         steps.value.splice(targetIndex, 0, movedItem);
     };
 
-
     const getParamDefinitions = (transforrmationKey: string) => {
         const def = definitions.value.find((d) => d.key === transforrmationKey);
         return def ? def.parameters : [];
     }
+
+    // Execute Pipeline
+    const runPipeline = async () => {
+        if (!inputText.value) return;
+
+        isExecuting.value = true;
+        errorMessage.value = null;
+
+        try {
+            const payload = {
+                text: inputText.value,
+                steps: steps.value.map((s) => ({
+                    transformationKey: s.transformationKey,
+                    parameters: s.parameters,
+                })),
+            };
+
+            result.value = await executeTransformations(payload);
+
+        } catch (err: unknown) {
+            if(err instanceof Error) {
+                errorMessage.value = err.message;
+            } else {
+                errorMessage.value = 'Failed to execute transformations.';
+            }
+        } finally {
+            isExecuting.value = false;
+        }
+    };
 
     onMounted(() => {
         loadTransformations();
@@ -89,85 +124,135 @@ import DynamicField from './DynamicField.vue';
             <button @click="loadTransformations">Retry</button>
         </div>
 
-        <!-- Ready State -->
+         <!-- Ready State -->
         <div v-else class="form-section">
-            <label for="transformation-select">Choose a Transformation: </label>
-            <div class ="select-row">
+            <label for="input-text">Input Text:</label>
+            <textarea
+                id="input-text"
+                rows="3"
+                v-model="inputText"
+                placeholder="Enter text to transform"
+                class="text-input"
+            ></textarea>
+            <label for="transformation-select">Choose a Transformation:</label>
+            <div class="select-row">
                 <select id="transformation-select" v-model="selectedKey">
-                    <option vakue="" disabled>-- Select an operation --</option>
-                    <option v-for="item in definitions"
-                            :key="item.key"
-                            :value="item.key"
-                        >
-                            {{ item.displayName }}
-                        </option>
+                <option value="" disabled>-- Select an operation --</option>
+                <option
+                    v-for="item in definitions"
+                    :key="item.key"
+                    :value="item.key"
+                >
+                    {{ item.displayName }}
+                </option>
                 </select>
 
                 <button :disabled="!selectedKey" @click="addStep">
-                    + Add Step
+                + Add Step
                 </button>
             </div>
-
             <!-- Configured Steps List -->
-                <div class="steps-container">
+            <div class="steps-container">
                 <h3>Pipeline Steps ({{ steps.length }})</h3>
-
-                <div v:if="steps.length === 0" class="empty-state">
-                    No steps added yet. Select a transformation above and click <strong>+ Add Step</strong>.
+                <div v-if="steps.length === 0" class="empty-state">
+                No steps added yet. Select a transformation above and click <strong>+ Add Step</strong>.
                 </div>
-
-                <ul v:else class="step-list">
+                <ul v-else class="step-list">
                     <li v-for="(step, index) in steps" :key="step.id" class="step-item">
                         <div class="step-header">
-                            <span class="step-order">{{ index + 1 }}</span>
-                            <span class="step-name"> {{ step.displayName }}</span>
-                            <code class="step-key"> {{ step.transformationKey }}</code>
-                        
+                        <span class="step-order">{{ index + 1 }}</span>
+                        <span class="step-name">{{ step.displayName }}</span>
+                        <code class="step-key">{{ step.transformationKey }}</code>
 
-                            <!-- Action buttons for reordering and deleting -->
-                            <div class="step-actions">
-                                <button 
-                                    type="button" 
-                                    class="action-btn"
-                                    title="Move Up"
-                                    :disabled="index === 0"
-                                    @click="moveStep(index, 'up')">
-                                    ↑
-                                </button>
-                                <button
-                                    type="button"
-                                    class="action-btn"
-                                    title="Move down"
-                                    :disabled="index === steps.length - 1"
-                                    @click="moveStep(index, 'down')"
-                                    >
-                                    ↓
-                                </button>
-                                <button
-                                    type="button"
-                                    class="action-btn delete-btn"
-                                    title="Delete"
-                                    @click="removeStep(step.id)">
-                                    ✕
-                                </button>
-                            </div>
+                        <!-- Action buttons for reordering and deleting -->
+                        <div class="step-actions">
+                            <button
+                            type="button"
+                            class="action-btn"
+                            title="Move Up"
+                            :disabled="index === 0"
+                            @click="moveStep(index, 'up')"
+                            >
+                            ↑
+                            </button>
+                            <button
+                            type="button"
+                            class="action-btn"
+                            title="Move Down"
+                            :disabled="index === steps.length - 1"
+                            @click="moveStep(index, 'down')"
+                            >
+                            ↓
+                            </button>
+                            <button
+                            type="button"
+                            class="action-btn delete-btn"
+                            title="Delete"
+                            @click="removeStep(step.id)"
+                            >
+                            ✕
+                            </button>
                         </div>
-
-                        <!--Dynamic Form Foelds-->
+                        </div>
+                        <!--Dynamic Form Fields-->
                         <div v-if="getParamDefinitions(step.transformationKey).length > 0" class="params-grid">
-                            <DynamicField
-                                v-for="param in getParamDefinitions(step.transformationKey)"
-                                :key="param.name"
-                                :param="param"
-                                v-model="step.parameters[param.name]"
-                            />
+                        <DynamicField
+                            v-for="param in getParamDefinitions(step.transformationKey)"
+                            :key="param.name"
+                            :param="param"
+                            v-model="step.parameters[param.name]"
+                        />
                         </div>
                         <div v-else class="no-params-msg">
-                            No additional configuration required.
+                        No additional configuration required.
                         </div>
                     </li>
                 </ul>
             </div>
+
+            <!--Pipeline button -->
+            <div style="margin-top: 1rem;">
+                <button
+                    type="button"
+                    :disabled="isExecuting || steps.length === 0 || !inputText" 
+                    @click="runPipeline"
+                    >
+                    {{ isExecuting ? 'Running' : 'Run Pipeline' }}
+                </button>
+            </div>
+
+            <!-- Results & Snapshot Display -->
+            <div v-if="result" style="margin-top: 1.5rem; border-top: 1px solid #cbd5e1; padding-top: 1rem;">
+                <h3>Result</h3>
+                <p><strong>Original:</strong> <code>{{ result.originalText }}</code></p>
+                <p><strong>Final Output:</strong> <code style="color: #15803d; font-weight: bold;">{{ result.finalResult }}</code></p>
+
+                <h4>Step Snapshots</h4>
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #cbd5e1;">
+                                    <th style="padding: 6px;">#</th>
+                                    <th style="padding: 6px;">Step</th>
+                                    <th style="padding: 6px;">Input</th>
+                                    <th style="padding: 6px;">Output</th>
+                                    <th style="padding: 6px;">Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="item in result.history"
+                        :key="item.stepIndex"
+                        style="border-bottom: 1px solid #e2e8f0;"
+                        >
+                            <td style="padding: 6px;">{{ item.stepIndex }}</td>
+                            <td style="padding: 6px;">{{ item.transformationName }}</td>
+                            <td style="padding: 6px;"><code>{{ item.inputSnapshot }}</code></td>
+                            <td style="padding: 6px;"><code>{{ item.outputSnapshot }}</code></td>
+                            <td style="padding: 6px;">{{ item.executionTime }} ms</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
         </div>
     </div>
 </template>
@@ -205,6 +290,23 @@ import DynamicField from './DynamicField.vue';
 .select-row {
   display: flex;
   gap: 0.5rem;
+}
+
+.text-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.75rem;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
 }
 
 select {
