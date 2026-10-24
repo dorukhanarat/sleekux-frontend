@@ -3,6 +3,7 @@
     import {ref, onMounted} from 'vue';
     import { getTransformations } from '../api/transformationApi';
     import type { ConfiguredStep, TransformationDefinition } from '../types/transformation';
+import DynamicField from './DynamicField.vue';
 
     const definitions = ref<TransformationDefinition[]>([]);
     const selectedKey = ref<String>('');
@@ -62,6 +63,12 @@
         steps.value.splice(targetIndex, 0, movedItem);
     };
 
+
+    const getParamDefinitions = (transforrmationKey: string) => {
+        const def = definitions.value.find((d) => d.key === transforrmationKey);
+        return def ? def.parameters : [];
+    }
+
     onMounted(() => {
         loadTransformations();
     });
@@ -86,12 +93,12 @@
         <div v-else class="form-section">
             <label for="transformation-select">Choose a Transformation: </label>
             <div class ="select-row">
-                <!-- v-model binds the selected value directly to our selectedKey ref -->
                 <select id="transformation-select" v-model="selectedKey">
                     <option vakue="" disabled>-- Select an operation --</option>
                     <option v-for="item in definitions"
                             :key="item.key"
-                            :value="item.key">
+                            :value="item.key"
+                        >
                             {{ item.displayName }}
                         </option>
                 </select>
@@ -146,9 +153,18 @@
                             </div>
                         </div>
 
-                        <!-- Temporary debug view of initial parameters -->
-                        <pre class="params-preview">{{ step.parameters }}</pre>
-
+                        <!--Dynamic Form Foelds-->
+                        <div v-if="getParamDefinitions(step.transformationKey).length > 0" class="params-grid">
+                            <DynamicField
+                                v-for="param in getParamDefinitions(step.transformationKey)"
+                                :key="param.name"
+                                :param="param"
+                                v-model="step.parameters[param.name]"
+                            />
+                        </div>
+                        <div v-else class="no-params-msg">
+                            No additional configuration required.
+                        </div>
                     </li>
                 </ul>
             </div>
@@ -157,9 +173,9 @@
 </template>
 
 <style scoped>
-/* 'scoped' ensures these styles apply only to this component */
+/* Keeping previous styles, with additions for the form grid */
 .pipeline-container {
-  max-width: 600px;
+  max-width: 650px;
   margin: 2rem auto;
   padding: 1.5rem;
   border: 1px solid #e2e8f0;
@@ -248,7 +264,7 @@ button:disabled {
 .step-item {
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  padding: 0.75rem 1rem;
+  padding: 1rem;
   background-color: #f8fafc;
 }
 
@@ -256,6 +272,7 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .step-order {
@@ -310,12 +327,18 @@ button:disabled {
   background-color: #fee2e2;
 }
 
-.params-preview {
-  margin: 0.5rem 0 0 0;
-  padding: 0.5rem;
-  background-color: #f1f5f9;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  color: #334155;
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.no-params-msg {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-style: italic;
+  padding-top: 0.25rem;
 }
 </style>
