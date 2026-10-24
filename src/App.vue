@@ -1,7 +1,17 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import TransformationPipeline from './components/TransformationPipeline.vue';
 </script>
 
 <template>
-  <HelloWorld />
+  <main>
+    <TransformationPipeline />
+  </main>
 </template>
+
+<style>
+/* Global resets or layout styles */
+body {
+  margin: 0;
+  background-color: #f8fafc;
+}
+</style>
