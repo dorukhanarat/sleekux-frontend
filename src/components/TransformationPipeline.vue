@@ -2,12 +2,14 @@
 <script setup lang ="ts">
     import {ref, onMounted} from 'vue';
     import { getTransformations } from '../api/transformationApi';
-    import type { TransformationDefinition } from '../types/transformation';
+    import type { ConfiguredStep, TransformationDefinition } from '../types/transformation';
 
     const definitions = ref<TransformationDefinition[]>([]);
     const selectedKey = ref<String>('');
     const isLoading = ref<boolean>(false);
     const errorMessage = ref<string | null>(null);
+
+    const steps = ref<ConfiguredStep[]>([]);
 
     const loadTransformations = async () => {
         isLoading.value = true;
@@ -25,8 +27,40 @@
         } finally {
             isLoading.value = false;
         }
-
     }
+
+    const addStep = () => {
+        if(!selectedKey.value) return;
+
+        const def = definitions.value.find((d) => d.key === selectedKey.value);
+        if(!def) return;
+
+        const defaultParams: Record<string, string | number | boolean> = {};
+        def.parameters.forEach((param) => {
+            defaultParams[param.name] = param.defaultValue;
+        });
+
+        steps.value.push({
+            id: crypto.randomUUID(),
+            transformationKey: def.key,
+            displayName: def.displayName,
+            parameters: defaultParams,
+        });
+
+        selectedKey.value = '';
+    };
+
+    const removeStep = (id: string) => {
+        steps.value = steps.value.filter((step) => step.id !== id);
+    };
+
+    const moveStep = (index: number, direction: 'up' | 'down') => {
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex > steps.value.length) return;
+
+        const [movedItem] = steps.value.splice(index, 1);
+        steps.value.splice(targetIndex, 0, movedItem);
+    };
 
     onMounted(() => {
         loadTransformations();
@@ -50,26 +84,74 @@
 
         <!-- Ready State -->
         <div v-else class="form-section">
-                <label for="transformation-select">Choose a Transformation: </label>
-                <div class ="select-row">
-                    <!-- v-model binds the selected value directly to our selectedKey ref -->
-                    <select id="transformation-select" v-model="selectedKey">
-                        <option vakue="" disabled>-- Select an operation --</option>
-                        <option v-for="item in definitions"
-                                :key="item.key"
-                                :value="item.key">
-                                {{ item.displayName }}
-                            </option>
-                    </select>
-                    <button :disabled="!selectedKey">
-                        Add Step
-                    </button>
+            <label for="transformation-select">Choose a Transformation: </label>
+            <div class ="select-row">
+                <!-- v-model binds the selected value directly to our selectedKey ref -->
+                <select id="transformation-select" v-model="selectedKey">
+                    <option vakue="" disabled>-- Select an operation --</option>
+                    <option v-for="item in definitions"
+                            :key="item.key"
+                            :value="item.key">
+                            {{ item.displayName }}
+                        </option>
+                </select>
+
+                <button :disabled="!selectedKey" @click="addStep">
+                    + Add Step
+                </button>
+            </div>
+
+            <!-- Configured Steps List -->
+                <div class="steps-container">
+                <h3>Pipeline Steps ({{ steps.length }})</h3>
+
+                <div v:if="steps.length === 0" class="empty-state">
+                    No steps added yet. Select a transformation above and click <strong>+ Add Step</strong>.
                 </div>
 
-                <!-- Preview what was selected -->
-                <p v:if="selectedKey" class="selection-preview">
-                    Currently selected key: <code>{{ selectedKey }}</code>
-                </p>
+                <ul v:else class="step-list">
+                    <li v-for="(step, index) in steps" :key="step.id" class="step-item">
+                        <div class="step-header">
+                            <span class="step-order">{{ index + 1 }}</span>
+                            <span class="step-name"> {{ step.displayName }}</span>
+                            <code class="step-key"> {{ step.transformationKey }}</code>
+                        
+
+                            <!-- Action buttons for reordering and deleting -->
+                            <div class="step-actions">
+                                <button 
+                                    type="button" 
+                                    class="action-btn"
+                                    title="Move Up"
+                                    :disabled="index === 0"
+                                    @click="moveStep(index, 'up')">
+                                    ↑
+                                </button>
+                                <button
+                                    type="button"
+                                    class="action-btn"
+                                    title="Move down"
+                                    :disabled="index === steps.length - 1"
+                                    @click="moveStep(index, 'down')"
+                                    >
+                                    ↓
+                                </button>
+                                <button
+                                    type="button"
+                                    class="action-btn delete-btn"
+                                    title="Delete"
+                                    @click="removeStep(step.id)">
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Temporary debug view of initial parameters -->
+                        <pre class="params-preview">{{ step.parameters }}</pre>
+
+                    </li>
+                </ul>
+            </div>
         </div>
     </div>
 </template>
@@ -83,6 +165,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-family: sans-serif;
+  background-color: #ffffff;
 }
 
 .status-msg {
@@ -100,7 +183,7 @@
 .form-section {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1.25rem;
 }
 
 .select-row {
@@ -131,16 +214,108 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.selection-preview {
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
-  color: #475569;
+.steps-container {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 1rem;
 }
 
-code {
-  background-color: #f1f5f9;
+.steps-container h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+  color: #1e293b;
+}
+
+.empty-state {
+  padding: 1.5rem;
+  text-align: center;
+  color: #64748b;
+  background-color: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.step-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.step-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background-color: #f8fafc;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.step-order {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #e2e8f0;
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #334155;
+}
+
+.step-name {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.step-key {
+  font-size: 0.8rem;
+  background: #e2e8f0;
   padding: 2px 6px;
   border-radius: 4px;
-  color: #0f172a;
+}
+
+.step-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.action-btn {
+  background-color: transparent;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.action-btn:hover:not(:disabled) {
+  background-color: #e2e8f0;
+}
+
+.delete-btn {
+  color: #ef4444;
+  border-color: #fca5a5;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background-color: #fee2e2;
+}
+
+.params-preview {
+  margin: 0.5rem 0 0 0;
+  padding: 0.5rem;
+  background-color: #f1f5f9;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #334155;
 }
 </style>

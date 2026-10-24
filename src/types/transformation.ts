@@ -14,3 +14,10 @@ export interface TransformationDefinition {
     key: string;
     parameters: TransformationParameterDef[];
 }
+
+export interface ConfiguredStep {
+    id: string;
+    transformationKey: string;
+    displayName: string;
+    parameters: Record<string, string | number | boolean >
+}
