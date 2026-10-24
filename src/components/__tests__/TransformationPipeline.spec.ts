@@ -114,7 +114,7 @@ describe('TransformationPipeline', () => {
             await addStep(wrapper, 'replace');
 
             const grid = wrapper.find('.params-grid');
-            expect((grid.find('input[type="text"]').element as HTMLInputElement).value).toBe('a');
+            expect((grid.find('textarea').element as HTMLTextAreaElement).value).toBe('a');
             expect((grid.find('input[type="number"]').element as HTMLInputElement).value).toBe('1');
             expect((grid.find('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(false);
         });
@@ -189,7 +189,7 @@ describe('TransformationPipeline', () => {
             await addStep(wrapper, 'upper');
 
             const grid = wrapper.find('.params-grid');
-            await grid.find('input[type="text"]').setValue('x');
+            await grid.find('textarea').setValue('x');
             await grid.find('input[type="number"]').setValue('3');
             await grid.find('input[type="checkbox"]').setValue(true);
 
@@ -236,7 +236,7 @@ describe('TransformationPipeline', () => {
             expect(values).toEqual(['  banana  ', 'banana', '  banana  ', 'banana']);
         });
 
-        it('shows the error when execution fails', async () => {
+        it('shows a run error under the button and keeps the steps visible', async () => {
             vi.mocked(executeTransformations).mockRejectedValue(new Error('Bad regex'));
             const wrapper = await mountLoaded();
 
@@ -245,7 +245,77 @@ describe('TransformationPipeline', () => {
             await findButton(wrapper, 'Run Pipeline').trigger('click');
             await flushPromises();
 
-            expect(wrapper.find('.error-box').text()).toContain('Bad regex');
+            expect(wrapper.find('.run-error').text()).toContain('Bad regex');
+            expect(stepNames(wrapper)).toEqual(['Uppercase']);
+            expect(wrapper.findAll('button').some((b) => b.text() === 'Retry')).toBe(false);
+        });
+
+        it("shows the backend's error message instead of the HTTP status text", async () => {
+            const axiosError = Object.assign(new Error('Request failed with status code 400'), {
+                isAxiosError: true,
+                response: { data: { status: 400, error: 'Bad Request', message: 'Unclosed group near index 1' } },
+            });
+            vi.mocked(executeTransformations).mockRejectedValue(axiosError);
+            const wrapper = await mountLoaded();
+
+            await wrapper.find('#input-text').setValue('banana');
+            await addStep(wrapper, 'upper');
+            await findButton(wrapper, 'Run Pipeline').trigger('click');
+            await flushPromises();
+
+            expect(wrapper.find('.run-error').text()).toBe('Unclosed group near index 1');
+        });
+
+        it('clears the run error once the pipeline is edited', async () => {
+            vi.mocked(executeTransformations).mockRejectedValue(new Error('Bad regex'));
+            const wrapper = await mountLoaded();
+
+            await wrapper.find('#input-text').setValue('banana');
+            await addStep(wrapper, 'upper');
+            await findButton(wrapper, 'Run Pipeline').trigger('click');
+            await flushPromises();
+
+            await wrapper.find('#input-text').setValue('apple');
+            expect(wrapper.find('.run-error').exists()).toBe(false);
+        });
+
+        it('does not call the backend when a required value is empty', async () => {
+            const wrapper = await mountLoaded();
+
+            await wrapper.find('#input-text').setValue('banana');
+            await addStep(wrapper, 'replace');
+            await wrapper.find('.params-grid textarea').setValue('');
+            await findButton(wrapper, 'Run Pipeline').trigger('click');
+            await flushPromises();
+
+            expect(executeTransformations).not.toHaveBeenCalled();
+            expect(wrapper.find('.run-error').text()).toBe('Step 1 (Replace): Target is required.');
+        });
+
+        it('allows whitespace-only values in required fields', async () => {
+            vi.mocked(executeTransformations).mockResolvedValue(response);
+            const wrapper = await mountLoaded();
+
+            await wrapper.find('#input-text').setValue('banana');
+            await addStep(wrapper, 'replace');
+            await wrapper.find('.params-grid textarea').setValue(' ');
+            await findButton(wrapper, 'Run Pipeline').trigger('click');
+            await flushPromises();
+
+            expect(vi.mocked(executeTransformations).mock.calls[0][0].steps[0].parameters.target).toBe(' ');
+        });
+
+        it('sends the default value for a cleared optional number field', async () => {
+            vi.mocked(executeTransformations).mockResolvedValue(response);
+            const wrapper = await mountLoaded();
+
+            await wrapper.find('#input-text').setValue('banana');
+            await addStep(wrapper, 'replace');
+            await wrapper.find('.params-grid input[type="number"]').setValue('');
+            await findButton(wrapper, 'Run Pipeline').trigger('click');
+            await flushPromises();
+
+            expect(vi.mocked(executeTransformations).mock.calls[0][0].steps[0].parameters.count).toBe(1);
         });
     });
 });

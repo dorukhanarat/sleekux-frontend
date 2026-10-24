@@ -1,6 +1,7 @@
 <!-- src/components/TransformationPipeline.vue -->
 <script setup lang ="ts">
-    import { ref, onMounted } from 'vue';
+    import { ref, onMounted, watch } from 'vue';
+    import { isAxiosError } from 'axios';
     import { executeTransformations, getTransformations } from '../api/transformationApi';
     import type { TransformResponse,  ConfiguredStep, TransformationDefinition } from '../types/transformation';
     import DynamicField from './DynamicField.vue';
@@ -15,7 +16,16 @@
     const isLoading = ref<boolean>(false);
     const isExecuting = ref<boolean>(false);
     const errorMessage = ref<string | null>(null);
+    // Kept apart from errorMessage so a failed run doesn't hide the form
+    const runError = ref<string | null>(null);
 
+    // Prefer the backend's "message" field over axios's generic status text
+    const getErrorMessage = (err: unknown, fallback: string): string => {
+        if (isAxiosError(err) && typeof err.response?.data?.message === 'string') {
+            return err.response.data.message;
+        }
+        return err instanceof Error ? err.message : fallback;
+    };
 
     // Fetch available transformations
     const loadTransformations = async () => {
@@ -26,11 +36,7 @@
             const data = await getTransformations();
             definitions.value = data;
         } catch ( err: unknown) {
-            if (err instanceof Error) {
-                errorMessage.value = err.message;
-            } else {
-                errorMessage.value = 'Failed to load transformations';
-            }
+            errorMessage.value = getErrorMessage(err, 'Failed to load transformations');
         } finally {
             isLoading.value = false;
         }
@@ -75,34 +81,60 @@
         return def ? def.parameters : [];
     }
 
+    // Fill in cleared optional numbers with their default and collect missing required values
+    const buildStepParameters = (step: ConfiguredStep, index: number, problems: string[]) => {
+        const parameters = { ...step.parameters };
+
+        getParamDefinitions(step.transformationKey).forEach((param) => {
+            const value = parameters[param.name];
+            if (value !== '' && value !== undefined && value !== null) return;
+
+            if (param.required) {
+                problems.push(`Step ${index + 1} (${step.displayName}): ${param.label || param.name} is required.`);
+            } else if (param.type === 'number') {
+                parameters[param.name] = param.defaultValue;
+            }
+        });
+
+        return parameters;
+    };
+
     // Execute Pipeline
     const runPipeline = async () => {
         if (!inputText.value) return;
 
+        runError.value = null;
+
+        const problems: string[] = [];
+        const payloadSteps = steps.value.map((s, index) => ({
+            transformationKey: s.transformationKey,
+            parameters: buildStepParameters(s, index, problems),
+        }));
+
+        if (problems.length > 0) {
+            runError.value = problems.join('\n');
+            return;
+        }
+
         isExecuting.value = true;
-        errorMessage.value = null;
 
         try {
-            const payload = {
+            result.value = await executeTransformations({
                 text: inputText.value,
-                steps: steps.value.map((s) => ({
-                    transformationKey: s.transformationKey,
-                    parameters: s.parameters,
-                })),
-            };
-
-            result.value = await executeTransformations(payload);
-
+                steps: payloadSteps,
+            });
         } catch (err: unknown) {
-            if(err instanceof Error) {
-                errorMessage.value = err.message;
-            } else {
-                errorMessage.value = 'Failed to execute transformations.';
-            }
+            result.value = null;
+            runError.value = getErrorMessage(err, 'Failed to execute transformations.');
         } finally {
             isExecuting.value = false;
         }
     };
+
+    // An old run error no longer applies once the pipeline is edited
+    watch([inputText, steps], () => {
+        runError.value = null;
+    }, { deep: true });
 
     onMounted(() => {
         loadTransformations();
@@ -221,6 +253,11 @@
                 </button>
             </div>
 
+            <!-- Run Error: shown under the button, the steps stay editable -->
+            <div v-if="runError" class="error-box run-error" role="alert">
+                {{ runError }}
+            </div>
+
             <!-- Results & Snapshot Display -->
             <div v-if="result" style="margin-top: 1.5rem; border-top: 1px solid #cbd5e1; padding-top: 1rem;">
                 <h3>Result</h3>
@@ -279,6 +316,10 @@
   color: #991b1b;
   padding: 1rem;
   border-radius: 6px;
+}
+
+.run-error {
+  white-space: pre-line;
 }
 
 .form-section {

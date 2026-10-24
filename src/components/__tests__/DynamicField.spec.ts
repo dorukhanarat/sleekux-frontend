@@ -39,30 +39,86 @@ describe('DynamicField', () => {
         });
     });
 
-    describe('text input', () => {
-        it('renders a text input with the current value and placeholder', () => {
-            const wrapper = mountField(makeParam({ placeholder: 'e.g. foo' }), 'hello');
-            const input = wrapper.find<HTMLInputElement>('input[type="text"]');
+    describe('hint', () => {
+        it.each(['text', 'number', 'regex', 'boolean'])('stays visible for %s fields that have a value', (type) => {
+            const value = type === 'number' ? 3 : type === 'boolean' ? true : 'both';
+            const wrapper = mountField(makeParam({ type, placeholder: 'Where to trim: start, end or both' }), value);
 
-            expect(input.element.value).toBe('hello');
-            expect(input.attributes('placeholder')).toBe('e.g. foo');
+            expect(wrapper.find('.hint').text()).toBe('Where to trim: start, end or both');
         });
 
-        it('is used for regex and unknown types', () => {
-            expect(mountField(makeParam({ type: 'regex' }), '').find('input[type="text"]').exists()).toBe(true);
-            expect(mountField(makeParam({ type: 'something-else' }), '').find('input[type="text"]').exists()).toBe(true);
+        it('is not rendered when the parameter has no placeholder', () => {
+            const wrapper = mountField(makeParam({ placeholder: '' }), 'x');
+            expect(wrapper.find('.hint').exists()).toBe(false);
+        });
+    });
+
+    describe('text field', () => {
+        it('renders a text area with the current value', () => {
+            const wrapper = mountField(makeParam(), 'hello');
+            const textarea = wrapper.find<HTMLTextAreaElement>('textarea');
+
+            expect(textarea.element.value).toBe('hello');
         });
 
-        it('emits update:modelValue with the typed string', async () => {
+        it('is used for unknown types', () => {
+            const wrapper = mountField(makeParam({ type: 'something-else' }), '');
+            expect(wrapper.find('textarea').exists()).toBe(true);
+        });
+
+        it('keeps line breaks in the value and grows to fit them', () => {
+            const wrapper = mountField(makeParam(), 'a\nb\nc');
+            const textarea = wrapper.find<HTMLTextAreaElement>('textarea');
+
+            expect(textarea.element.value).toBe('a\nb\nc');
+            expect(textarea.attributes('rows')).toBe('3');
+        });
+
+        it('emits update:modelValue with the typed string, including line breaks', async () => {
             const wrapper = mountField(makeParam(), '');
-            await wrapper.find('input[type="text"]').setValue('world');
+            await wrapper.find('textarea').setValue('one\ntwo');
 
-            expect(wrapper.emitted('update:modelValue')).toEqual([['world']]);
+            expect(wrapper.emitted('update:modelValue')).toEqual([['one\ntwo']]);
         });
 
         it('sets the required attribute for required parameters', () => {
             const wrapper = mountField(makeParam({ required: true }), '');
-            expect(wrapper.find('input[type="text"]').attributes()).toHaveProperty('required');
+            expect(wrapper.find('textarea').attributes()).toHaveProperty('required');
+        });
+    });
+
+    describe('regex field', () => {
+        it('renders a single-line monospace input', async () => {
+            const wrapper = mountField(makeParam({ type: 'regex' }), '\\d+');
+            const input = wrapper.find<HTMLInputElement>('input[type="text"]');
+
+            expect(input.element.value).toBe('\\d+');
+            expect(input.classes()).toContain('mono');
+
+            await input.setValue('\\s+');
+            expect(wrapper.emitted('update:modelValue')).toEqual([['\\s+']]);
+        });
+    });
+
+    describe('whitespace preview', () => {
+        it.each([
+            [' ', '·'],
+            [', ', ',·'],
+            ['\n', '↵'],
+            ['\t-', '→-'],
+        ])('spells out the whitespace in %j', (value, preview) => {
+            const wrapper = mountField(makeParam(), value);
+            expect(wrapper.find('.whitespace-preview code').text()).toBe(preview);
+        });
+
+        it('is hidden for values without edge whitespace or line breaks', () => {
+            const wrapper = mountField(makeParam(), 'a b');
+            expect(wrapper.find('.whitespace-preview').exists()).toBe(false);
+        });
+
+        it('is hidden for number fields', () => {
+            const wrapper = mountField(makeParam({ type: 'number' }), 5);
+            expect(wrapper.find('.whitespace-preview').exists()).toBe(false);
         });
     });
 
@@ -102,11 +158,6 @@ describe('DynamicField', () => {
             expect(checkbox.element.checked).toBe(true);
         });
 
-        it('shows the placeholder as a hint', () => {
-            const wrapper = mountField(boolParam, false);
-            expect(wrapper.find('.hint').text()).toBe('Match case');
-        });
-
         it('emits the checked state', async () => {
             const wrapper = mountField(boolParam, false);
             await wrapper.find('input[type="checkbox"]').setValue(true);
@@ -129,7 +180,7 @@ describe('DynamicField', () => {
                 },
             });
 
-            await wrapper.find('input[type="text"]').setValue('changed');
+            await wrapper.find('textarea').setValue('changed');
 
             expect(parentValue).toBe('changed');
         });
