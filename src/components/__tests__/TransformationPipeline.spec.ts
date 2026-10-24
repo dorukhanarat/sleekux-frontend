@@ -219,6 +219,23 @@ describe('TransformationPipeline', () => {
             expect(cells).toEqual(['1', 'Replace', 'banana', 'bxnxnx', '2 ms']);
         });
 
+        it('keeps leading and trailing whitespace visible in results', async () => {
+            vi.mocked(executeTransformations).mockResolvedValue({
+                originalText: '  banana  ',
+                finalResult: 'banana',
+                history: [{ ...response.history[0], inputSnapshot: '  banana  ', outputSnapshot: 'banana' }],
+            });
+            const wrapper = await mountLoaded();
+
+            await wrapper.find('#input-text').setValue('  banana  ');
+            await addStep(wrapper, 'upper');
+            await findButton(wrapper, 'Run Pipeline').trigger('click');
+            await flushPromises();
+
+            const values = wrapper.findAll('code.text-value').map((c) => c.element.textContent);
+            expect(values).toEqual(['  banana  ', 'banana', '  banana  ', 'banana']);
+        });
+
         it('shows the error when execution fails', async () => {
             vi.mocked(executeTransformations).mockRejectedValue(new Error('Bad regex'));
             const wrapper = await mountLoaded();

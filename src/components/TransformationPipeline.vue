@@ -224,8 +224,8 @@
             <!-- Results & Snapshot Display -->
             <div v-if="result" style="margin-top: 1.5rem; border-top: 1px solid #cbd5e1; padding-top: 1rem;">
                 <h3>Result</h3>
-                <p><strong>Original:</strong> <code>{{ result.originalText }}</code></p>
-                <p><strong>Final Output:</strong> <code style="color: #15803d; font-weight: bold;">{{ result.finalResult }}</code></p>
+                <p><strong>Original:</strong> <code class="text-value">{{ result.originalText }}</code></p>
+                <p><strong>Final Output:</strong> <code class="text-value" style="color: #15803d; font-weight: bold;">{{ result.finalResult }}</code></p>
 
                 <h4>Step Snapshots</h4>
                 <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
@@ -245,8 +245,8 @@
                         >
                             <td style="padding: 6px;">{{ item.stepIndex }}</td>
                             <td style="padding: 6px;">{{ item.transformationName }}</td>
-                            <td style="padding: 6px;"><code>{{ item.inputSnapshot }}</code></td>
-                            <td style="padding: 6px;"><code>{{ item.outputSnapshot }}</code></td>
+                            <td style="padding: 6px;"><code class="text-value">{{ item.inputSnapshot }}</code></td>
+                            <td style="padding: 6px;"><code class="text-value">{{ item.outputSnapshot }}</code></td>
                             <td style="padding: 6px;">{{ item.executionTime }} ms</td>
                         </tr>
                     </tbody>
@@ -435,6 +435,16 @@ button:disabled {
   gap: 12px;
   padding-top: 0.5rem;
   border-top: 1px solid #e2e8f0;
+}
+
+/* Keep leading/trailing and repeated whitespace visible, so changes like trim show up */
+.text-value {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  padding: 1px 2px;
 }
 
 .no-params-msg {
