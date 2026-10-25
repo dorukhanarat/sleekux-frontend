@@ -41,3 +41,5 @@ Vitest and Vue Test Utils were added, with the API mocked so tests run without t
 2. Single-line inputs drop line breaks, so "Join With: `\n`" couldn't work. Text fields became text areas, and values with edge whitespace show a preview (`·` space, `→` tab, `↵` line break).
 3. A failed run replaced the whole form with an error box. Run errors now show under the Run button with the backend's own message, and the steps stay editable.
 4. Empty required fields are now caught before sending, and cleared optional numbers use their default.
+
+**10. Clear button**: starting over meant deleting each step by hand. A Clear button next to Run Pipeline now resets the input, the steps, the result and any run error in one click. It is disabled while a run is in progress, so a late response can't bring a result back after clearing, and it is styled as a secondary button so it doesn't compete with Run.

@@ -68,6 +68,15 @@
         steps.value = steps.value.filter((step) => step.id !== id);
     };
 
+    // Reset the input, the steps and the last result
+    const clearPipeline = () => {
+        inputText.value = '';
+        steps.value = [];
+        selectedKey.value = '';
+        result.value = null;
+        runError.value = null;
+    };
+
     const moveStep = (index: number, direction: 'up' | 'down') => {
         const targetIndex = direction === 'up' ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= steps.value.length) return;
@@ -243,13 +252,21 @@
             </div>
 
             <!--Pipeline button -->
-            <div style="margin-top: 1rem;">
+            <div class="pipeline-actions">
                 <button
                     type="button"
-                    :disabled="isExecuting || steps.length === 0 || !inputText" 
+                    :disabled="isExecuting || steps.length === 0 || !inputText"
                     @click="runPipeline"
                     >
                     {{ isExecuting ? 'Running' : 'Run Pipeline' }}
+                </button>
+                <button
+                    type="button"
+                    class="secondary-btn"
+                    :disabled="isExecuting || (!inputText && steps.length === 0 && !result)"
+                    @click="clearPipeline"
+                    >
+                    Clear
                 </button>
             </div>
 
@@ -316,6 +333,27 @@
   color: #991b1b;
   padding: 1rem;
   border-radius: 6px;
+}
+
+.pipeline-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.secondary-btn {
+  background-color: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.secondary-btn:hover:not(:disabled) {
+  background-color: #f1f5f9;
+}
+
+.secondary-btn:disabled {
+  background-color: #ffffff;
+  color: #94a3b8;
 }
 
 .run-error {

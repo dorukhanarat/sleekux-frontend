@@ -151,6 +151,53 @@ describe('TransformationPipeline', () => {
         });
     });
 
+    describe('clearing the pipeline', () => {
+        it('is disabled when there is nothing to clear', async () => {
+            const wrapper = await mountLoaded();
+            expect(findButton(wrapper, 'Clear').attributes()).toHaveProperty('disabled');
+
+            await wrapper.find('#input-text').setValue('banana');
+            expect(findButton(wrapper, 'Clear').attributes()).not.toHaveProperty('disabled');
+        });
+
+        it('clears the input text, the steps and the result', async () => {
+            vi.mocked(executeTransformations).mockResolvedValue({
+                originalText: 'banana',
+                finalResult: 'BANANA',
+                history: [],
+            });
+            const wrapper = await mountLoaded();
+
+            await wrapper.find('#input-text').setValue('banana');
+            await addStep(wrapper, 'upper');
+            await addStep(wrapper, 'replace');
+            await findButton(wrapper, 'Run Pipeline').trigger('click');
+            await flushPromises();
+            expect(wrapper.text()).toContain('BANANA');
+
+            await findButton(wrapper, 'Clear').trigger('click');
+
+            expect((wrapper.find('#input-text').element as HTMLTextAreaElement).value).toBe('');
+            expect(stepNames(wrapper)).toEqual([]);
+            expect(wrapper.find('.empty-state').exists()).toBe(true);
+            expect(wrapper.text()).not.toContain('BANANA');
+            expect(findButton(wrapper, 'Clear').attributes()).toHaveProperty('disabled');
+        });
+
+        it('clears a run error', async () => {
+            vi.mocked(executeTransformations).mockRejectedValue(new Error('Bad regex'));
+            const wrapper = await mountLoaded();
+
+            await wrapper.find('#input-text').setValue('banana');
+            await addStep(wrapper, 'upper');
+            await findButton(wrapper, 'Run Pipeline').trigger('click');
+            await flushPromises();
+
+            await findButton(wrapper, 'Clear').trigger('click');
+            expect(wrapper.find('.run-error').exists()).toBe(false);
+        });
+    });
+
     describe('running the pipeline', () => {
         const response: TransformResponse = {
             originalText: 'banana',
